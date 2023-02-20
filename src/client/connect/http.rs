@@ -9,9 +9,12 @@ use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
 
+#[cfg(feature = "dpdk")]
+use dpdk_io::tcp::TcpStream;
 use futures_util::future::Either;
 use http::uri::{Scheme, Uri};
 use pin_project_lite::pin_project;
+#[cfg(not(feature = "dpdk"))]
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::time::Sleep;
 use tracing::{debug, trace, warn};
@@ -350,8 +353,11 @@ where
 
         let sock = c.connect().await?;
 
-        if let Err(e) = sock.set_nodelay(config.nodelay) {
-            warn!("tcp set_nodelay error: {}", e);
+        #[cfg(not(feature = "dpdk"))]
+        {
+            if let Err(e) = sock.set_nodelay(config.nodelay) {
+                warn!("tcp set_nodelay error: {}", e);
+            }
         }
 
         Ok(sock)
@@ -362,7 +368,10 @@ impl Connection for TcpStream {
     fn connected(&self) -> Connected {
         let connected = Connected::new();
         if let (Ok(remote_addr), Ok(local_addr)) = (self.peer_addr(), self.local_addr()) {
-            connected.extra(HttpInfo { remote_addr, local_addr })
+            connected.extra(HttpInfo {
+                remote_addr,
+                local_addr,
+            })
         } else {
             connected
         }
@@ -535,6 +544,24 @@ impl ConnectingTcpRemote {
         let mut err = None;
         for addr in &mut self.addrs {
             debug!("connecting to {}", addr);
+            #[cfg(feature = "dpdk")]
+            match dpdk_io::dpdk_agent().connect(addr) {
+                Ok(tcp) => {
+                    debug!("connected to {}", addr);
+                    return Ok(tcp);
+                }
+                Err(e) => {
+                    trace!("connect error for {}: {:?}", addr, e);
+                    err = Some(ConnectError::new(
+                        e.to_string(),
+                        std::io::Error::new(
+                            std::io::ErrorKind::NotConnected,
+                            "Network unreachable",
+                        ),
+                    ));
+                }
+            }
+            #[cfg(not(feature = "dpdk"))]
             match connect(&addr, config, self.connect_timeout)?.await {
                 Ok(tcp) => {
                     debug!("connected to {}", addr);
@@ -585,6 +612,7 @@ fn bind_local_address(
     Ok(())
 }
 
+#[cfg(not(feature = "dpdk"))]
 fn connect(
     addr: &SocketAddr,
     config: &Config,

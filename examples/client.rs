@@ -10,6 +10,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dpdk_io::bootstrap();
+
     pretty_env_logger::init();
 
     // Some simple CLI args requirements...
