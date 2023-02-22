@@ -365,7 +365,7 @@ where
 }
 
 #[cfg(not(feature = "dpdk"))]
-impl Connection for TcpStream {
+impl crate::client::connect::Connection for TcpStream {
     fn connected(&self) -> Connected {
         let connected = Connected::new();
         if let (Ok(remote_addr), Ok(local_addr)) = (self.peer_addr(), self.local_addr()) {
@@ -380,7 +380,7 @@ impl Connection for TcpStream {
 }
 
 #[cfg(feature = "dpdk")]
-impl Connection for dpdk_io::tcp::TcpStream {
+impl crate::client::connect::Connection for dpdk_io::tcp::TcpStream {
     fn connected(&self) -> Connected {
         let connected = Connected::new();
         if let (Ok(remote_addr), Ok(local_addr)) = (self.peer_addr(), self.local_addr()) {
