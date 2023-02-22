@@ -364,7 +364,23 @@ where
     }
 }
 
+#[cfg(not(feature = "dpdk"))]
 impl Connection for TcpStream {
+    fn connected(&self) -> Connected {
+        let connected = Connected::new();
+        if let (Ok(remote_addr), Ok(local_addr)) = (self.peer_addr(), self.local_addr()) {
+            connected.extra(HttpInfo {
+                remote_addr,
+                local_addr,
+            })
+        } else {
+            connected
+        }
+    }
+}
+
+#[cfg(feature = "dpdk")]
+impl Connection for dpdk_io::tcp::TcpStream {
     fn connected(&self) -> Connected {
         let connected = Connected::new();
         if let (Ok(remote_addr), Ok(local_addr)) = (self.peer_addr(), self.local_addr()) {
